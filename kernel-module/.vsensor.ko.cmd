@@ -1,0 +1,1 @@
+savedcmd_vsensor.ko := /home/georgegio/buildroot/output/host/bin/arm-linux-ld -r -EL -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T /home/georgegio/buildroot/output/build/linux-6.18.7/scripts/module.lds -o vsensor.ko vsensor.o vsensor.mod.o .module-common.o
