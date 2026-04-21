@@ -994,6 +994,7 @@ deps_vsensor.o := \
     $(wildcard include/config/ARCH_OMAP) \
   /home/georgegio/buildroot/output/build/linux-6.18.7/include/linux/pm_wakeup.h \
   /home/georgegio/buildroot/output/build/linux-6.18.7/include/linux/cdev.h \
+  vsensor.h \
 
 vsensor.o: $(deps_vsensor.o)
 

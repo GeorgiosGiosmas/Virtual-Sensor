@@ -10,19 +10,14 @@
 #include <linux/random.h>
 #include <linux/ktime.h>
 
+#include "vsensor.h" 
 
 #define DEVICE_NAME "vsensor"
 #define NUM_DEVICES 1
 #define VSENSOR_BUFFER_SIZE 16
-#define VSENSOR_INTERVAL_MS 1000  // 1 second
+#define VSENSOR_DEFAULT_INTERVAL_MS 1000  // 1 second
 
 static DEFINE_SPINLOCK(vsensor_lock);
-
-struct vsensor_reading {
-    s32 temperature_mC;                                                     // millicelsius, e.g. 23500 = 23.5°C
-    s32 humidity_mRH;                                                       // milli-percent, e.g. 61200 = 61.2%RH
-    u64 timestamp_ns;                                                       // nanoseconds since boot
-};
 
 static dev_t vsensor_dev_num;
 static struct cdev vsensor_cdev;
@@ -33,6 +28,7 @@ static int ring_head = 0;                                                   // n
 static int ring_count = 0;                                                  // number of valid entries (0 to BUFFER_SIZE)
 
 static struct timer_list vsensor_timer;
+static u32 vsensor_interval_ms = VSENSOR_DEFAULT_INTERVAL_MS;
 
 /* =========== Timer callback: generate a new reading =========== */
 static void vsensor_timer_callback(struct timer_list *t)
@@ -60,7 +56,7 @@ static void vsensor_timer_callback(struct timer_list *t)
     spin_unlock_irqrestore(&vsensor_lock, flags);
 
     /* Rearm the timer */
-    mod_timer(&vsensor_timer, jiffies + msecs_to_jiffies(VSENSOR_INTERVAL_MS));
+    mod_timer(&vsensor_timer, jiffies + msecs_to_jiffies(vsensor_interval_ms));
 }
 
 /* =========== File Operations =========== */
@@ -114,12 +110,62 @@ static ssize_t vsensor_read(struct file *file, char __user *buffer, size_t lengt
     return sizeof(latest);
 }
 
+/* =========== IOCTL Handler =========== */
+static long vsensor_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+    u32 tmp;
+    unsigned long flags;
+
+    switch (cmd) {
+
+    case VSENSOR_SET_INTERVAL:
+        /* Copy the new interval value from userspace */
+        if (copy_from_user(&tmp, (u32 __user *)arg, sizeof(tmp)))
+            return -EFAULT;
+
+        /* Sanity check: don't allow intervals less than 100ms or more than 10s */
+        if (tmp < 100 || tmp > 10000)
+            return -EINVAL;
+
+        vsensor_interval_ms = tmp;
+        /* The new interval takes effect on the next timer tick */
+        pr_info("vsensor: interval set to %u ms\n", tmp);
+        return 0;
+
+    case VSENSOR_GET_INTERVAL:
+        tmp = vsensor_interval_ms;
+        if (copy_to_user((u32 __user *)arg, &tmp, sizeof(tmp)))
+            return -EFAULT;
+        return 0;
+
+    case VSENSOR_GET_COUNT:
+        spin_lock_irqsave(&vsensor_lock, flags);
+        tmp = ring_count;
+        spin_unlock_irqrestore(&vsensor_lock, flags);
+        if (copy_to_user((u32 __user *)arg, &tmp, sizeof(tmp)))
+            return -EFAULT;
+        return 0;
+
+    case VSENSOR_FLUSH:
+        spin_lock_irqsave(&vsensor_lock, flags);
+        ring_head = 0;
+        ring_count = 0;
+        spin_unlock_irqrestore(&vsensor_lock, flags);
+        pr_info("vsensor: buffer flushed\n");
+        return 0;
+
+    default:
+        return -ENOTTY;  /* standard return for "unknown ioctl command" */
+    }
+}
+
 // Initialization of 'file_operations' structure
 static struct file_operations vsensor_fops = {
     .owner      = THIS_MODULE,
     .open       = vsensor_open,
     .release    = vsensor_release,
-    .read       = vsensor_read
+    .read       = vsensor_read,
+    .unlocked_ioctl = vsensor_ioctl
 };
 
 // vsensor init function
@@ -160,7 +206,7 @@ static int __init vsensor_init(void)
 
     /* Initialize and start the timer */
     timer_setup(&vsensor_timer, vsensor_timer_callback, 0);
-    mod_timer(&vsensor_timer, jiffies + msecs_to_jiffies(VSENSOR_INTERVAL_MS));
+    mod_timer(&vsensor_timer, jiffies + msecs_to_jiffies(vsensor_interval_ms));
 
     printk("Virtual Sensor loaded Successfully\n");
 
