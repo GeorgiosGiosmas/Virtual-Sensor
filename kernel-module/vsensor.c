@@ -165,7 +165,8 @@ static struct file_operations vsensor_fops = {
     .open       = vsensor_open,
     .release    = vsensor_release,
     .read       = vsensor_read,
-    .unlocked_ioctl = vsensor_ioctl
+    .unlocked_ioctl = vsensor_ioctl,
+    .llseek         = default_llseek
 };
 
 // vsensor init function
