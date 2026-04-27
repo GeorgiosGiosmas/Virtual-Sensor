@@ -1,0 +1,28 @@
+# Kernel module build artifacts
+kernel-module/*.o
+kernel-module/*.ko
+kernel-module/*.mod
+kernel-module/*.mod.c
+kernel-module/*.mod.o
+kernel-module/modules.order
+kernel-module/Module.symvers
+kernel-module/.*.cmd
+kernel-module/.tmp_versions/
+
+# Userspace app binary
+userspace-app/vsensor_reader
+
+# Rootfs overlay binaries (rebuilt from source)
+rootfs-overlay/root/*.ko
+rootfs-overlay/root/vsensor_reader
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
